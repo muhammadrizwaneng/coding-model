@@ -2,7 +2,8 @@ import argparse
 import json
 from pathlib import Path
 
-REQUIRED_FIELDS = ("instruction", "input", "output")
+REQUIRED_TEXT_FIELDS = ("instruction", "output")
+OPTIONAL_TEXT_FIELDS = ("input",)
 MIN_OUTPUT_CHARS = 40
 
 
@@ -12,10 +13,15 @@ def validate_record(record: object, line_number: int, seen_keys: set[tuple[str, 
     if not isinstance(record, dict):
         return [f"line {line_number}: record must be a JSON object"]
 
-    for field in REQUIRED_FIELDS:
+    for field in REQUIRED_TEXT_FIELDS:
         value = record.get(field)
         if not isinstance(value, str) or not value.strip():
             errors.append(f"line {line_number}: missing or empty '{field}'")
+
+    for field in OPTIONAL_TEXT_FIELDS:
+        value = record.get(field)
+        if value is not None and not isinstance(value, str):
+            errors.append(f"line {line_number}: '{field}' must be a string when provided")
 
     key = (
         str(record.get("instruction", "")).strip().lower(),

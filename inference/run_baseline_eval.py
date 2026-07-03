@@ -1,12 +1,17 @@
 import argparse
 import json
+import sys
 import time
 from pathlib import Path
 
-from test_model import DEFAULT_MODEL, ask_my_model
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
-DEFAULT_EVAL_FILE = Path("evaluation/eval_prompts.jsonl")
-DEFAULT_OUTPUT_FILE = Path("evaluation/baseline_results.jsonl")
+from inference.test_model import DEFAULT_MODEL, ask_my_model
+
+DEFAULT_EVAL_FILE = PROJECT_ROOT / "evaluation" / "eval_prompts.jsonl"
+DEFAULT_OUTPUT_FILE = PROJECT_ROOT / "evaluation" / "baseline_results.jsonl"
 
 
 def load_prompts(path: Path) -> list[dict[str, str]]:

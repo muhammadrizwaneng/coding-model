@@ -1,0 +1,5 @@
+-r requirements.txt
+
+# Install this on a CUDA GPU machine for QLoRA training.
+bitsandbytes
+sentencepiece
