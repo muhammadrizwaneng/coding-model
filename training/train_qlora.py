@@ -126,7 +126,7 @@ def main() -> int:
         save_total_limit=2,
         bf16=True,
         optim="paged_adamw_8bit",
-        max_seq_length=args.max_seq_length,
+        max_length=args.max_seq_length,
         dataset_text_field="text",
         report_to="none",
     )

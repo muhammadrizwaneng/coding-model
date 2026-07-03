@@ -50,7 +50,7 @@ Runtime > Change runtime type > Hardware accelerator > GPU
 Colab preinstalls many ML packages, so clean the conflicting packages before installing:
 
 ```bash
-!pip uninstall -y transformers peft trl accelerate bitsandbytes
+!pip uninstall -y transformers peft trl accelerate bitsandbytes torchvision torchaudio
 !pip install --no-cache-dir -r requirements-colab.txt
 ```
 
