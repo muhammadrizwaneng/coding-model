@@ -1,0 +1,9 @@
+# Colab has its own CUDA-enabled PyTorch build, so do not pin torch here.
+numpy<2
+transformers>=4.46.0
+datasets>=2.20.0
+accelerate>=0.34.0
+peft>=0.13.0
+trl>=0.12.0
+bitsandbytes>=0.43.1
+sentencepiece

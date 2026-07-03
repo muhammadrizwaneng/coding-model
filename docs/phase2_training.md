@@ -39,6 +39,40 @@ Do not train until this passes.
 venv/bin/python -m pip install -r requirements-training.txt
 ```
 
+## Google Colab Setup
+
+Use a GPU runtime:
+
+```text
+Runtime > Change runtime type > Hardware accelerator > GPU
+```
+
+Colab preinstalls many ML packages, so clean the conflicting packages before installing:
+
+```bash
+!pip uninstall -y transformers peft trl accelerate bitsandbytes
+!pip install --no-cache-dir -r requirements-colab.txt
+```
+
+After installing, restart the runtime:
+
+```text
+Runtime > Restart runtime
+```
+
+Then run:
+
+```bash
+%cd /content/coding-model/coding-model
+!python scripts/validate_dataset.py
+!python training/train_qlora.py \
+  --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
+  --epochs 1 \
+  --batch-size 1
+```
+
+Start with the 1.5B model on free Colab. Use the 7B model only if Colab gives you enough GPU memory.
+
 ## 3. Start a Small Test Run
 
 Run this section on a CUDA GPU machine, not on a normal Mac:
