@@ -1,0 +1,5 @@
+{"task": "fastapi_crud", "prompt": "Create a FastAPI CRUD API for products with SQLAlchemy. Include create, list, get by id, update, and delete endpoints."}
+{"task": "react_native_component", "prompt": "Create a reusable React Native profile card component with avatar, name, role, and a follow button."}
+{"task": "debugging", "prompt": "Fix this Python bug and explain the issue:\n\nitems = [1, 2, 3]\nprint(items[3])"}
+{"task": "code_explanation", "prompt": "Explain what dependency injection means in FastAPI and show a short example."}
+{"task": "api_integration", "prompt": "Write a React Native function that fetches products from an API and handles loading, success, and error states."}
