@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Coding Model Chat</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <aside class="sidebar">
+        <div class="brand">
+          <div class="brand-icon">CM</div>
+          <div>
+            <h1>Coding Model</h1>
+            <p>Local AI Assistant</p>
+          </div>
+        </div>
+
+        <div class="model-card">
+          <span class="label">Active Model</span>
+          <strong id="model-name">Loading...</strong>
+          <span class="provider" id="model-provider">loading</span>
+          <span class="sub-model" id="model-base"></span>
+        </div>
+
+        <button id="clear-chat" class="secondary-btn" type="button">New chat</button>
+
+        <div class="sidebar-footer">
+          <p>Write prompts, code, or debugging questions.</p>
+        </div>
+      </aside>
+
+      <main class="chat-panel">
+        <header class="chat-header">
+          <div>
+            <h2>Chat</h2>
+            <p id="status-text">Ready</p>
+          </div>
+        </header>
+
+        <section id="messages" class="messages" aria-live="polite">
+          <div class="message assistant">
+            <div class="avatar">AI</div>
+            <div class="bubble">
+              <p>Hi! I can help with Python, Node.js, React, Next.js, debugging, and code generation.</p>
+            </div>
+          </div>
+        </section>
+
+        <form id="chat-form" class="composer">
+          <div class="input-shell">
+            <textarea
+              id="prompt-input"
+              rows="4"
+              placeholder="Ask a coding question or paste code here..."
+              required
+            ></textarea>
+            <div class="composer-actions">
+              <span class="hint">Shift+Enter for new line</span>
+              <button id="send-btn" type="submit">Send</button>
+            </div>
+          </div>
+        </form>
+      </main>
+    </div>
+
+    <script src="/static/app.js"></script>
+  </body>
+</html>

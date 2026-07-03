@@ -1,42 +1,15 @@
 import argparse
-import time
 
-import ollama
-
-DEFAULT_MODEL = "qwen2.5-coder:7b"
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a professional full-stack coding assistant specializing in "
-    "FastAPI, React Native, PostgreSQL, debugging, and code explanation."
-)
+from inference.ollama_client import DEFAULT_MODEL, chat
 
 
-def ask_my_model(prompt_text: str, model: str = DEFAULT_MODEL, system_prompt: str = DEFAULT_SYSTEM_PROMPT) -> str:
-    print(f"Sending request to {model}...")
-    start_time = time.time()
-
-    try:
-        response = ollama.chat(
-            model=model,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": prompt_text},
-            ],
-        )
-    except Exception as exc:
-        raise RuntimeError(
-            "Ollama request failed. Make sure Ollama is installed, running, "
-            f"and the model is pulled with: ollama pull {model}"
-        ) from exc
-
-    end_time = time.time()
-    duration = end_time - start_time
-
-    answer = response["message"]["content"]
+def ask_my_model(prompt_text: str, model: str = DEFAULT_MODEL) -> str:
+    result = chat(message=prompt_text, model=model)
     print("\n--- AI RESPONSE ---")
-    print(answer)
+    print(result["response"])
     print("-------------------------")
-    print(f"Speed: generated response in {duration:.2f} seconds.")
-    return answer
+    print(f"Speed: generated response in {result['duration_seconds']} seconds.")
+    return result["response"]
 
 
 def main() -> None:
