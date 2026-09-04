@@ -33,6 +33,7 @@ SEED_EXAMPLES = [
 ]
 
 
+
 def write_jsonl(records: list[dict[str, str]], path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8") as file:
