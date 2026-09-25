@@ -13,18 +13,6 @@ activate the project virtual environment first:
 source venv/bin/activate
 ```
 
-Or run commands explicitly through the venv, for example:
-
-```bash
-venv/bin/python -m pip install -r requirements.txt
-```
-
-If PyTorch prints a NumPy 2 warning, reinstall the pinned requirements:
-
-```bash
-venv/bin/python -m pip install --upgrade --force-reinstall "numpy<2"
-```
-
 ## 1. Validate Dataset
 
 ```bash
@@ -47,39 +35,39 @@ Use a GPU runtime:
 Runtime > Change runtime type > Hardware accelerator > GPU
 ```
 
-Colab preinstalls many ML packages, so clean the conflicting packages before installing:
+Install deps, restart runtime, then train the **1.5B** model into a matching output directory:
 
 ```bash
 !pip uninstall -y transformers peft trl accelerate bitsandbytes torchvision torchaudio
 !pip install --no-cache-dir -r requirements-colab.txt
 ```
 
-After installing, restart the runtime:
-
-```text
-Runtime > Restart runtime
-```
-
-Then run:
-
 ```bash
-%cd /content/coding-model/coding-model
+%cd /content/coding-model
 !python scripts/validate_dataset.py
 !python training/train_qlora.py \
   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
-  --epochs 1 \
-  --batch-size 1
+  --output-dir models/qwen2.5-coder-1.5b-qlora \
+  --epochs 2 \
+  --batch-size 1 \
+  --learning-rate 1e-4 \
+  --gradient-accumulation-steps 8
 ```
 
-Start with the 1.5B model on free Colab. Use the 7B model only if Colab gives you enough GPU memory.
+The trainer writes `adapter_meta.json` next to the adapter so inference can load the correct base model.
 
-## 3. Start a Small Test Run
+Zip for download:
 
-Run this section on a CUDA GPU machine, not on a normal Mac:
+```bash
+!zip -r qwen2.5-coder-1.5b-qlora.zip models/qwen2.5-coder-1.5b-qlora
+```
+
+## 3. Start a Small Test Run (7B on a real GPU host)
 
 ```bash
 venv/bin/python training/train_qlora.py \
   --dataset-path datasets/coding_dataset.jsonl \
+  --model-id Qwen/Qwen2.5-Coder-7B-Instruct \
   --output-dir models/qwen2.5-coder-7b-qlora \
   --epochs 1 \
   --batch-size 1 \
@@ -88,18 +76,28 @@ venv/bin/python training/train_qlora.py \
 
 The script:
 
-- Loads `Qwen/Qwen2.5-Coder-7B-Instruct`
-- Formats your JSONL records into chat-style training text
-- Splits the dataset into train/eval sets
-- Trains LoRA adapters with 4-bit quantization
-- Saves adapters under `models/qwen2.5-coder-7b-qlora`
+- Formats JSONL records with the same chat template + system prompt used at inference
+- Splits train/eval, trains LoRA with 4-bit quantization, early-stops on eval loss
+- Saves adapters + `adapter_meta.json` under the output directory
 
 ## 4. Compare Against Baseline
 
-After training, generate responses from the fine-tuned model and compare them with:
+```bash
+MODEL_BACKEND=ollama python inference/run_baseline_eval.py \
+  --output-file evaluation/baseline_results.jsonl
 
-```text
-evaluation/baseline_results.jsonl
+MODEL_BACKEND=finetuned ADAPTER_PATH=models/qwen2.5-coder-1.5b-qlora \
+  python inference/run_baseline_eval.py \
+  --output-file evaluation/finetuned_results.jsonl
+
+python inference/compare_eval.py \
+  --baseline evaluation/baseline_results.jsonl \
+  --candidate evaluation/finetuned_results.jsonl
 ```
 
-The next improvement should be a comparison script that scores baseline vs fine-tuned responses with a small rubric.
+## 5. Serve Locally
+
+```bash
+# Auto: adapter if present, otherwise Ollama
+MODEL_BACKEND=auto uvicorn server.app:app --reload
+```

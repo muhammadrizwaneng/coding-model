@@ -17,8 +17,8 @@ BATCHES = {
         },
         {
             "instruction": "Create a FastAPI CRUD API for tasks using an in-memory list.",
-            "input": "Task fields: id, title, completed.",
-            "output": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Task(BaseModel):\n    id: int\n    title: str\n    completed: bool = False\n\ntasks: list[Task] = []\n\n@app.post('/tasks', status_code=201)\ndef create_task(task: Task):\n    tasks.append(task)\n    return task\n\n@app.get('/tasks')\ndef list_tasks():\n    return tasks\n\n@app.get('/tasks/{task_id}')\ndef get_task(task_id: int):\n    for task in tasks:\n        if task.id == task_id:\n            return task\n    raise HTTPException(status_code=404, detail='Task not found')",
+            "input": "Task fields: id, title, completed. Include create, list, get, update, and delete.",
+            "output": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass Task(BaseModel):\n    id: int\n    title: str\n    completed: bool = False\n\nclass TaskUpdate(BaseModel):\n    title: str | None = None\n    completed: bool | None = None\n\ntasks: dict[int, Task] = {}\n\n@app.post('/tasks', status_code=201)\ndef create_task(task: Task):\n    if task.id in tasks:\n        raise HTTPException(status_code=409, detail='Task already exists')\n    tasks[task.id] = task\n    return task\n\n@app.get('/tasks')\ndef list_tasks():\n    return list(tasks.values())\n\n@app.get('/tasks/{task_id}')\ndef get_task(task_id: int):\n    task = tasks.get(task_id)\n    if task is None:\n        raise HTTPException(status_code=404, detail='Task not found')\n    return task\n\n@app.patch('/tasks/{task_id}')\ndef update_task(task_id: int, data: TaskUpdate):\n    task = tasks.get(task_id)\n    if task is None:\n        raise HTTPException(status_code=404, detail='Task not found')\n    updated = task.model_copy(update=data.model_dump(exclude_none=True))\n    tasks[task_id] = updated\n    return updated\n\n@app.delete('/tasks/{task_id}', status_code=204)\ndef delete_task(task_id: int):\n    if task_id not in tasks:\n        raise HTTPException(status_code=404, detail='Task not found')\n    del tasks[task_id]",
         },
         {
             "instruction": "Create a FastAPI endpoint with pagination query parameters.",
@@ -31,14 +31,14 @@ BATCHES = {
             "output": "from fastapi import FastAPI, UploadFile, File\n\napp = FastAPI()\n\n@app.post('/upload')\nasync def upload_file(file: UploadFile = File(...)):\n    content = await file.read()\n    return {'filename': file.filename, 'size': len(content)}",
         },
         {
-            "instruction": "Create a FastAPI login endpoint that returns a mock JWT token.",
-            "input": "",
-            "output": "from fastapi import FastAPI, HTTPException\nfrom pydantic import BaseModel\n\napp = FastAPI()\n\nclass LoginRequest(BaseModel):\n    email: str\n    password: str\n\n@app.post('/login')\ndef login(data: LoginRequest):\n    if data.email == 'admin@example.com' and data.password == 'secret123':\n        return {'access_token': 'mock-jwt-token', 'token_type': 'bearer'}\n    raise HTTPException(status_code=401, detail='Invalid credentials')",
+            "instruction": "Create a FastAPI login endpoint that returns a JWT token.",
+            "input": "Read JWT_SECRET from the environment. Use a demo user lookup only.",
+            "output": "import os\nfrom datetime import datetime, timedelta, timezone\nfrom fastapi import FastAPI, HTTPException\nfrom jose import jwt\nfrom pydantic import BaseModel, EmailStr, Field\n\napp = FastAPI()\nJWT_SECRET = os.environ['JWT_SECRET']\n\nclass LoginRequest(BaseModel):\n    email: EmailStr\n    password: str = Field(min_length=8)\n\nDEMO_USERS = {'admin@example.com': 'replace-me-with-hashed-password'}\n\n@app.post('/login')\ndef login(data: LoginRequest):\n    stored = DEMO_USERS.get(data.email)\n    if stored is None or data.password != stored:\n        raise HTTPException(status_code=401, detail='Invalid credentials')\n    token = jwt.encode(\n        {'sub': data.email, 'exp': datetime.now(timezone.utc) + timedelta(hours=1)},\n        JWT_SECRET,\n        algorithm='HS256',\n    )\n    return {'access_token': token, 'token_type': 'bearer'}",
         },
         {
             "instruction": "Create a FastAPI dependency for a SQLAlchemy database session.",
-            "input": "Use PostgreSQL connection string.",
-            "output": "from sqlalchemy import create_engine\nfrom sqlalchemy.orm import sessionmaker, declarative_base\n\nDATABASE_URL = 'postgresql://user:password@localhost:5432/appdb'\nengine = create_engine(DATABASE_URL)\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\nBase = declarative_base()\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()",
+            "input": "Read DATABASE_URL from the environment.",
+            "output": "import os\nfrom sqlalchemy import create_engine\nfrom sqlalchemy.orm import sessionmaker, declarative_base\n\nDATABASE_URL = os.environ['DATABASE_URL']\nengine = create_engine(DATABASE_URL)\nSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)\nBase = declarative_base()\n\ndef get_db():\n    db = SessionLocal()\n    try:\n        yield db\n    finally:\n        db.close()",
         },
         {
             "instruction": "Create a FastAPI custom exception handler for not found errors.",
@@ -72,8 +72,8 @@ BATCHES = {
         },
         {
             "instruction": "Create a FastAPI app with CORS middleware enabled.",
-            "input": "Allow all origins for development.",
-            "output": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=['*'],\n    allow_credentials=True,\n    allow_methods=['*'],\n    allow_headers=['*'],\n)",
+            "input": "Allow the local Vite frontend at http://localhost:5173 only.",
+            "output": "from fastapi import FastAPI\nfrom fastapi.middleware.cors import CORSMiddleware\n\napp = FastAPI()\napp.add_middleware(\n    CORSMiddleware,\n    allow_origins=['http://localhost:5173'],\n    allow_credentials=True,\n    allow_methods=['GET', 'POST', 'PUT', 'PATCH', 'DELETE'],\n    allow_headers=['Authorization', 'Content-Type'],\n)",
         },
         {
             "instruction": "Create a versioned FastAPI route under /api/v1.",
@@ -114,8 +114,8 @@ BATCHES = {
         },
         {
             "instruction": "Create a Node.js Express CRUD API for appointments using MongoDB and Mongoose.",
-            "input": "Include get by id endpoint and status enum validation.",
-            "output": "const express = require('express');\nconst mongoose = require('mongoose');\n\nconst app = express();\napp.use(express.json());\n\nmongoose.connect('mongodb://localhost:27017/appointments');\n\nconst appointmentSchema = new mongoose.Schema({\n  patient_name: { type: String, required: true },\n  doctor_name: { type: String, required: true },\n  appointment_date: { type: Date, required: true },\n  status: { type: String, enum: ['scheduled', 'completed', 'cancelled'], required: true },\n});\n\nconst Appointment = mongoose.model('Appointment', appointmentSchema);\n\napp.get('/appointments', async (req, res) => {\n  const items = await Appointment.find();\n  res.json(items);\n});\n\napp.get('/appointments/:id', async (req, res) => {\n  const item = await Appointment.findById(req.params.id);\n  if (!item) return res.status(404).json({ message: 'Not found' });\n  res.json(item);\n});\n\napp.post('/appointments', async (req, res) => {\n  const item = await Appointment.create(req.body);\n  res.status(201).json(item);\n});\n\napp.listen(3000);",
+            "input": "Include create, list, get by id, update, and delete. Validate status enum.",
+            "output": "const express = require('express');\nconst mongoose = require('mongoose');\n\nconst app = express();\napp.use(express.json());\n\nmongoose.connect(process.env.MONGODB_URI);\n\nconst appointmentSchema = new mongoose.Schema({\n  patient_name: { type: String, required: true },\n  doctor_name: { type: String, required: true },\n  appointment_date: { type: Date, required: true },\n  status: { type: String, enum: ['scheduled', 'completed', 'cancelled'], required: true },\n});\n\nconst Appointment = mongoose.model('Appointment', appointmentSchema);\n\napp.get('/appointments', async (req, res) => {\n  const items = await Appointment.find();\n  res.json(items);\n});\n\napp.get('/appointments/:id', async (req, res) => {\n  const item = await Appointment.findById(req.params.id);\n  if (!item) return res.status(404).json({ message: 'Not found' });\n  res.json(item);\n});\n\napp.post('/appointments', async (req, res) => {\n  try {\n    const item = await Appointment.create(req.body);\n    res.status(201).json(item);\n  } catch (error) {\n    res.status(400).json({ message: error.message });\n  }\n});\n\napp.put('/appointments/:id', async (req, res) => {\n  const item = await Appointment.findByIdAndUpdate(req.params.id, req.body, {\n    new: true,\n    runValidators: true,\n  });\n  if (!item) return res.status(404).json({ message: 'Not found' });\n  res.json(item);\n});\n\napp.delete('/appointments/:id', async (req, res) => {\n  const item = await Appointment.findByIdAndDelete(req.params.id);\n  if (!item) return res.status(404).json({ message: 'Not found' });\n  res.status(204).send();\n});\n\napp.listen(3000);",
         },
         {
             "instruction": "Create Express middleware that logs request method and URL.",
@@ -124,8 +124,8 @@ BATCHES = {
         },
         {
             "instruction": "Create an Express JWT login route.",
-            "input": "Return token on valid credentials.",
-            "output": "const express = require('express');\nconst jwt = require('jsonwebtoken');\n\nconst app = express();\napp.use(express.json());\nconst SECRET = 'dev-secret';\n\napp.post('/login', (req, res) => {\n  const { email, password } = req.body;\n  if (email === 'admin@example.com' && password === 'secret123') {\n    const token = jwt.sign({ email }, SECRET, { expiresIn: '1h' });\n    return res.json({ access_token: token });\n  }\n  return res.status(401).json({ message: 'Invalid credentials' });\n});",
+            "input": "Return a signed token on valid credentials. Read JWT_SECRET from process.env.",
+            "output": "const express = require('express');\nconst jwt = require('jsonwebtoken');\n\nconst app = express();\napp.use(express.json());\nconst SECRET = process.env.JWT_SECRET;\n\n// Demo-only lookup. Replace with a real user store + password hash check.\nconst DEMO_USERS = { 'admin@example.com': 'replace-me-with-hashed-password' };\n\napp.post('/login', (req, res) => {\n  const { email, password } = req.body;\n  if (!SECRET) return res.status(500).json({ message: 'JWT_SECRET is not configured' });\n  if (DEMO_USERS[email] && DEMO_USERS[email] === password) {\n    const token = jwt.sign({ email }, SECRET, { expiresIn: '1h' });\n    return res.json({ access_token: token, token_type: 'bearer' });\n  }\n  return res.status(401).json({ message: 'Invalid credentials' });\n});",
         },
         {
             "instruction": "Create a global Express error handling middleware.",
@@ -139,8 +139,8 @@ BATCHES = {
         },
         {
             "instruction": "Create an Express API that queries PostgreSQL using pg Pool.",
-            "input": "Return all users.",
-            "output": "const express = require('express');\nconst { Pool } = require('pg');\n\nconst app = express();\nconst pool = new Pool({ connectionString: 'postgresql://user:password@localhost:5432/appdb' });\n\napp.get('/users', async (req, res) => {\n  const result = await pool.query('SELECT id, name, email FROM users');\n  res.json(result.rows);\n});",
+            "input": "Return all users. Read DATABASE_URL from process.env.",
+            "output": "const express = require('express');\nconst { Pool } = require('pg');\n\nconst app = express();\nconst pool = new Pool({ connectionString: process.env.DATABASE_URL });\n\napp.get('/users', async (req, res) => {\n  const result = await pool.query('SELECT id, name, email FROM users');\n  res.json(result.rows);\n});",
         },
         {
             "instruction": "Create an Express 404 not found middleware.",

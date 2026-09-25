@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from pathlib import Path
@@ -9,23 +10,58 @@ from peft.utils import set_peft_model_state_dict
 from safetensors.torch import load_file
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 
+from inference.prompts import DEFAULT_SYSTEM_PROMPT, truncate_history
+
 DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_ID", "Qwen/Qwen2.5-Coder-1.5B-Instruct")
-DEFAULT_ADAPTER_PATH = Path(os.getenv("ADAPTER_PATH", "models/qwen2.5-coder-7b-qlora"))
-DEFAULT_DISPLAY_NAME = os.getenv("MODEL_DISPLAY_NAME", "my-coding-model-1.5b")
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a professional full-stack coding assistant specializing in "
-    "FastAPI, React, Next.js, Node.js, PostgreSQL, debugging, refactoring, "
-    "testing, and code explanation. Provide clear, practical answers with "
-    "complete code when appropriate."
+DEFAULT_ADAPTER_PATH = Path(
+    os.getenv("ADAPTER_PATH", "models/qwen2.5-coder-1.5b-qlora")
 )
+LEGACY_ADAPTER_PATH = Path("models/qwen2.5-coder-7b-qlora")
+DEFAULT_DISPLAY_NAME = os.getenv("MODEL_DISPLAY_NAME", "my-coding-model")
 
 _model = None
 _tokenizer = None
 _device = None
+_loaded_base_model = None
+_loaded_adapter_path = None
 
 
-def adapter_exists(adapter_path: Path = DEFAULT_ADAPTER_PATH) -> bool:
-    return adapter_path.is_dir() and (adapter_path / "adapter_config.json").exists()
+def adapter_exists(adapter_path: Optional[Path] = None) -> bool:
+    path = adapter_path or resolve_adapter_path()
+    return path.is_dir() and (path / "adapter_config.json").exists()
+
+
+def resolve_adapter_path() -> Path:
+    if DEFAULT_ADAPTER_PATH.is_dir() and (DEFAULT_ADAPTER_PATH / "adapter_config.json").exists():
+        return DEFAULT_ADAPTER_PATH
+    if LEGACY_ADAPTER_PATH.is_dir() and (LEGACY_ADAPTER_PATH / "adapter_config.json").exists():
+        return LEGACY_ADAPTER_PATH
+    return DEFAULT_ADAPTER_PATH
+
+
+def _read_adapter_meta(adapter_path: Path) -> dict:
+    meta_path = adapter_path / "adapter_meta.json"
+    if not meta_path.exists():
+        return {}
+    try:
+        return json.loads(meta_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return {}
+
+
+def resolve_base_model_id(adapter_path: Path, fallback: str = DEFAULT_BASE_MODEL) -> str:
+    meta = _read_adapter_meta(adapter_path)
+    if isinstance(meta.get("base_model_id"), str) and meta["base_model_id"].strip():
+        return meta["base_model_id"].strip()
+
+    try:
+        peft_config = PeftConfig.from_pretrained(str(adapter_path))
+        if getattr(peft_config, "base_model_name_or_path", None):
+            return peft_config.base_model_name_or_path
+    except Exception:
+        pass
+
+    return fallback
 
 
 def _resolve_device() -> str:
@@ -36,35 +72,40 @@ def _resolve_device() -> str:
 
 
 def load_model(
-    base_model_id: str = DEFAULT_BASE_MODEL,
-    adapter_path: Path = DEFAULT_ADAPTER_PATH,
+    base_model_id: Optional[str] = None,
+    adapter_path: Optional[Path] = None,
 ) -> None:
-    global _model, _tokenizer, _device
+    global _model, _tokenizer, _device, _loaded_base_model, _loaded_adapter_path
 
     if _model is not None and _tokenizer is not None:
         return
 
-    if not adapter_exists(adapter_path):
+    adapter = adapter_path or resolve_adapter_path()
+    if not adapter_exists(adapter):
         raise RuntimeError(
-            f"Fine-tuned adapter not found at {adapter_path}. "
+            f"Fine-tuned adapter not found at {adapter}. "
             "Download your Colab zip and extract it there, for example:\n"
-            "models/qwen2.5-coder-7b-qlora/adapter_config.json"
+            "models/qwen2.5-coder-1.5b-qlora/adapter_config.json\n"
+            "Or set MODEL_BACKEND=ollama / MODEL_BACKEND=auto."
         )
 
+    base_id = base_model_id or resolve_base_model_id(adapter)
     _device = _resolve_device()
     try:
-        _tokenizer = AutoTokenizer.from_pretrained(base_model_id, trust_remote_code=True)
+        _tokenizer = AutoTokenizer.from_pretrained(base_id, trust_remote_code=True)
     except Exception:
         _tokenizer = AutoTokenizer.from_pretrained(
-            base_model_id,
+            base_id,
             trust_remote_code=True,
             use_fast=False,
         )
     if _tokenizer.pad_token is None:
         _tokenizer.pad_token = _tokenizer.eos_token
 
-    _model = _load_finetuned_model(base_model_id, adapter_path, _device)
+    _model = _load_finetuned_model(base_id, adapter, _device)
     _model.eval()
+    _loaded_base_model = base_id
+    _loaded_adapter_path = str(adapter)
 
 
 def _load_finetuned_model(base_model_id: str, adapter_path: Path, device: str):
@@ -110,10 +151,7 @@ def _build_messages(
     history: Optional[List[Dict[str, str]]],
 ) -> List[Dict[str, str]]:
     messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
-    if history:
-        for item in history:
-            if item["role"] in {"user", "assistant"}:
-                messages.append({"role": item["role"], "content": item["content"]})
+    messages.extend(truncate_history(history))
     messages.append({"role": "user", "content": message})
     return messages
 
@@ -153,19 +191,21 @@ def chat(
     return {
         "model": DEFAULT_DISPLAY_NAME,
         "provider": "huggingface-peft",
-        "base_model": DEFAULT_BASE_MODEL,
-        "adapter_path": str(DEFAULT_ADAPTER_PATH),
+        "base_model": _loaded_base_model or DEFAULT_BASE_MODEL,
+        "adapter_path": _loaded_adapter_path or str(resolve_adapter_path()),
         "response": answer,
         "duration_seconds": duration,
     }
 
 
 def model_info() -> Dict[str, str]:
+    adapter = resolve_adapter_path()
+    base_model = resolve_base_model_id(adapter) if adapter_exists(adapter) else DEFAULT_BASE_MODEL
     return {
         "model": DEFAULT_DISPLAY_NAME,
         "provider": "huggingface-peft",
-        "base_model": DEFAULT_BASE_MODEL,
-        "adapter_path": str(DEFAULT_ADAPTER_PATH),
-        "adapter_ready": str(adapter_exists()).lower(),
+        "base_model": base_model,
+        "adapter_path": str(adapter),
+        "adapter_ready": str(adapter_exists(adapter)).lower(),
         "inference_device": _resolve_device(),
     }

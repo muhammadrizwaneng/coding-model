@@ -1,16 +1,28 @@
 import argparse
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
 from datasets import Dataset, load_dataset
 from peft import LoraConfig
-from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
+from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, EarlyStoppingCallback
 from trl import SFTConfig, SFTTrainer
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+from inference.prompts import DEFAULT_SYSTEM_PROMPT
 
 DEFAULT_MODEL_ID = "Qwen/Qwen2.5-Coder-7B-Instruct"
 DEFAULT_DATASET_PATH = Path("datasets/coding_dataset.jsonl")
-DEFAULT_OUTPUT_DIR = Path("models/qwen2.5-coder-7b-qlora")
+
+
+def default_output_dir(model_id: str) -> Path:
+    slug = model_id.split("/")[-1].lower().replace("-instruct", "")
+    return Path(f"models/{slug}-qlora")
 
 
 def check_training_environment() -> None:
@@ -29,24 +41,32 @@ def check_training_environment() -> None:
         )
 
 
-def format_example(example: dict[str, str]) -> str:
+def format_example(example: dict[str, str], tokenizer) -> dict[str, str]:
     user_content = example["instruction"].strip()
     if example.get("input", "").strip():
         user_content = f"{user_content}\n\nContext:\n{example['input'].strip()}"
 
-    return (
-        "<|im_start|>system\n"
-        "You are a professional full-stack coding assistant specializing in FastAPI, "
-        "React Native, PostgreSQL, debugging, refactoring, testing, and API integration."
-        "<|im_end|>\n"
-        f"<|im_start|>user\n{user_content}<|im_end|>\n"
-        f"<|im_start|>assistant\n{example['output'].strip()}<|im_end|>"
+    messages = [
+        {"role": "system", "content": DEFAULT_SYSTEM_PROMPT},
+        {"role": "user", "content": user_content},
+        {"role": "assistant", "content": example["output"].strip()},
+    ]
+    text = tokenizer.apply_chat_template(
+        messages,
+        tokenize=False,
+        add_generation_prompt=False,
     )
+    return {"text": text}
 
 
-def prepare_dataset(dataset_path: Path, eval_ratio: float, seed: int) -> tuple[Dataset, Dataset]:
+def prepare_dataset(
+    dataset_path: Path,
+    tokenizer,
+    eval_ratio: float,
+    seed: int,
+) -> tuple[Dataset, Dataset]:
     dataset = load_dataset("json", data_files=str(dataset_path), split="train")
-    dataset = dataset.map(lambda example: {"text": format_example(example)})
+    dataset = dataset.map(lambda example: format_example(example, tokenizer))
 
     if len(dataset) < 10:
         raise ValueError("Dataset is too small for a train/eval split. Add more examples first.")
@@ -77,11 +97,29 @@ def build_model_and_tokenizer(model_id: str):
     return model, tokenizer
 
 
+def write_adapter_meta(output_dir: Path, model_id: str, dataset_path: Path) -> None:
+    meta = {
+        "base_model_id": model_id,
+        "dataset_path": str(dataset_path),
+        "trained_at": datetime.now(timezone.utc).isoformat(),
+        "system_prompt": DEFAULT_SYSTEM_PROMPT,
+    }
+    (output_dir / "adapter_meta.json").write_text(
+        json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Fine-tune Qwen Coder with QLoRA.")
     parser.add_argument("--model-id", default=DEFAULT_MODEL_ID)
     parser.add_argument("--dataset-path", default=DEFAULT_DATASET_PATH, type=Path)
-    parser.add_argument("--output-dir", default=DEFAULT_OUTPUT_DIR, type=Path)
+    parser.add_argument(
+        "--output-dir",
+        default=None,
+        type=Path,
+        help="Defaults to models/<model-slug>-qlora based on --model-id.",
+    )
     parser.add_argument("--eval-ratio", default=0.1, type=float)
     parser.add_argument("--seed", default=42, type=int)
     parser.add_argument("--epochs", default=1, type=float)
@@ -89,11 +127,19 @@ def main() -> int:
     parser.add_argument("--gradient-accumulation-steps", default=8, type=int)
     parser.add_argument("--learning-rate", default=2e-4, type=float)
     parser.add_argument("--max-seq-length", default=2048, type=int)
+    parser.add_argument("--early-stopping-patience", default=3, type=int)
     args = parser.parse_args()
 
+    output_dir = args.output_dir or default_output_dir(args.model_id)
+
     check_training_environment()
-    train_dataset, eval_dataset = prepare_dataset(args.dataset_path, args.eval_ratio, args.seed)
     model, tokenizer = build_model_and_tokenizer(args.model_id)
+    train_dataset, eval_dataset = prepare_dataset(
+        args.dataset_path,
+        tokenizer,
+        args.eval_ratio,
+        args.seed,
+    )
 
     peft_config = LoraConfig(
         r=16,
@@ -113,7 +159,7 @@ def main() -> int:
     )
 
     training_args = SFTConfig(
-        output_dir=str(args.output_dir),
+        output_dir=str(output_dir),
         num_train_epochs=args.epochs,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
@@ -124,6 +170,9 @@ def main() -> int:
         eval_steps=25,
         save_steps=25,
         save_total_limit=2,
+        load_best_model_at_end=True,
+        metric_for_best_model="eval_loss",
+        greater_is_better=False,
         bf16=True,
         optim="paged_adamw_8bit",
         max_length=args.max_seq_length,
@@ -138,13 +187,15 @@ def main() -> int:
         eval_dataset=eval_dataset,
         peft_config=peft_config,
         processing_class=tokenizer,
+        callbacks=[EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience)],
     )
 
     trainer.train()
-    trainer.save_model(str(args.output_dir))
-    tokenizer.save_pretrained(str(args.output_dir))
+    trainer.save_model(str(output_dir))
+    tokenizer.save_pretrained(str(output_dir))
+    write_adapter_meta(output_dir, args.model_id, args.dataset_path)
 
-    print(f"Saved QLoRA adapter and tokenizer files to {args.output_dir}")
+    print(f"Saved QLoRA adapter, tokenizer, and adapter_meta.json to {output_dir}")
     return 0
 
 

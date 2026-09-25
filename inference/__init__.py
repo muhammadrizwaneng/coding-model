@@ -1,3 +1,3 @@
-from inference import ollama_client, model_router
+from inference import model_router
 
-__all__ = ["ollama_client", "model_router"]
+__all__ = ["model_router"]

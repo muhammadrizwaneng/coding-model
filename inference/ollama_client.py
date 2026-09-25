@@ -3,13 +3,9 @@ from typing import Dict, List, Optional
 
 import ollama
 
+from inference.prompts import DEFAULT_SYSTEM_PROMPT, truncate_history
+
 DEFAULT_MODEL = "qwen2.5-coder:7b"
-DEFAULT_SYSTEM_PROMPT = (
-    "You are a professional full-stack coding assistant specializing in "
-    "FastAPI, React, Next.js, Node.js, PostgreSQL, debugging, refactoring, "
-    "testing, and code explanation. Provide clear, practical answers with "
-    "complete code when appropriate."
-)
 
 
 def chat(
@@ -19,8 +15,7 @@ def chat(
     history: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, object]:
     messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
-    if history:
-        messages.extend(history)
+    messages.extend(truncate_history(history))
     messages.append({"role": "user", "content": message})
 
     started_at = time.time()
@@ -37,6 +32,7 @@ def chat(
 
     return {
         "model": model,
+        "provider": "ollama",
         "response": answer,
         "duration_seconds": duration,
     }

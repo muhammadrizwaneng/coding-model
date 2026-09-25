@@ -1,5 +1,15 @@
-{"task": "fastapi_crud", "prompt": "Create a FastAPI CRUD API for products with SQLAlchemy. Include create, list, get by id, update, and delete endpoints."}
-{"task": "react_native_component", "prompt": "Create a reusable React Native profile card component with avatar, name, role, and a follow button."}
-{"task": "debugging", "prompt": "Fix this Python bug and explain the issue:\n\nitems = [1, 2, 3]\nprint(items[3])"}
-{"task": "code_explanation", "prompt": "Explain what dependency injection means in FastAPI and show a short example."}
-{"task": "api_integration", "prompt": "Write a React Native function that fetches products from an API and handles loading, success, and error states."}
+{"task": "fastapi_crud", "prompt": "Create a FastAPI CRUD API for products with SQLAlchemy. Include create, list, get by id, update, and delete endpoints.", "criteria": ["create", "update", "delete", "SQLAlchemy"]}
+{"task": "react_native_component", "prompt": "Create a reusable React Native profile card component with avatar, name, role, and a follow button.", "criteria": ["ProfileCard", "avatar", "Follow"]}
+{"task": "debugging", "prompt": "Fix this Python bug and explain the issue:\n\nitems = [1, 2, 3]\nprint(items[3])", "criteria": ["IndexError", "len(items)", "0"]}
+{"task": "code_explanation", "prompt": "Explain what dependency injection means in FastAPI and show a short example.", "criteria": ["Depends", "dependency"]}
+{"task": "api_integration", "prompt": "Write a React Native function that fetches products from an API and handles loading, success, and error states.", "criteria": ["loading", "error", "fetch"]}
+{"task": "fastapi_jwt", "prompt": "Create a FastAPI login endpoint that issues a JWT. Read JWT_SECRET from an environment variable and validate email/password with Pydantic.", "criteria": ["JWT_SECRET", "os.environ", "access_token"]}
+{"task": "postgres_session", "prompt": "Write a SQLAlchemy get_db dependency for FastAPI that reads DATABASE_URL from the environment and yields a session.", "criteria": ["DATABASE_URL", "yield", "SessionLocal"]}
+{"task": "express_crud", "prompt": "Create an Express + Mongoose CRUD API for appointments with status enum scheduled|completed|cancelled and all five endpoints.", "criteria": ["findById", "findByIdAndUpdate", "findByIdAndDelete", "status"]}
+{"task": "nextjs_api_route", "prompt": "Create a Next.js App Router GET API route that returns a paginated list of posts from an in-memory array.", "criteria": ["NextResponse", "page", "posts"]}
+{"task": "react_hook", "prompt": "Write a React useDebounce hook that delays updating a value until the user stops typing.", "criteria": ["useEffect", "setTimeout", "clearTimeout"]}
+{"task": "off_by_one", "prompt": "Fix this Python bug and explain the issue:\n\ndef get_average(numbers):\n    total = 0\n    for i in range(len(numbers) + 1):\n        total += numbers[i]\n    return total / len(numbers)", "criteria": ["off-by-one", "range(len(numbers))", "IndexError"]}
+{"task": "cors_secure", "prompt": "Show how to configure FastAPI CORS for a single frontend origin http://localhost:5173 without using allow_origins=['*'].", "criteria": ["localhost:5173", "CORSMiddleware"]}
+{"task": "angular_signal", "prompt": "Create an Angular standalone counter component using signals with increment and decrement buttons.", "criteria": ["signal", "standalone", "increment"]}
+{"task": "refactor_function", "prompt": "Refactor this function for readability and explain the changes:\n\ndef p(a):\n    r=[]\n    for i in a:\n        if i%2==0:r.append(i*i)\n    return r", "criteria": ["def ", "square", "even"]}
+{"task": "unit_test", "prompt": "Write a pytest unit test for a function add(a, b) that checks positive numbers and zero.", "criteria": ["def test_", "assert", "add"]}

@@ -79,8 +79,13 @@ async function loadModelInfo() {
     } else {
       modelBaseEl.textContent = "";
     }
-    if (data.adapter_ready === "false") {
-      statusTextEl.textContent = "Adapter not found. Add your Colab model files.";
+    if (data.adapter_ready === "false" && (data.backend === "finetuned" || data.backend === "auto")) {
+      statusTextEl.textContent =
+        data.backend === "finetuned"
+          ? "Adapter missing — chat will fail until you add LoRA files or set MODEL_BACKEND=ollama"
+          : "No adapter found — using Ollama fallback";
+    } else if (data.backend) {
+      statusTextEl.textContent = `Ready (${data.backend})`;
     }
   } catch (error) {
     modelNameEl.textContent = "Unavailable";
@@ -102,7 +107,6 @@ async function sendMessage(message) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         message,
-        model: activeModel,
         history: conversationHistory.slice(0, -1),
       }),
     });

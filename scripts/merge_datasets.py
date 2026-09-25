@@ -4,6 +4,7 @@ from pathlib import Path
 
 RAW_DIR = Path("datasets/raw")
 DEFAULT_OUTPUT = Path("datasets/coding_dataset.jsonl")
+SEED_FILE = Path("datasets/seed.jsonl")
 
 
 def load_jsonl(path: Path) -> list[dict[str, str]]:
@@ -51,8 +52,15 @@ def main() -> int:
     parser.add_argument("--output-file", default=DEFAULT_OUTPUT, type=Path)
     parser.add_argument(
         "--include-base",
-        action="store_true",
-        help="Include existing records from the base dataset before adding raw batches.",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Include existing main-dataset records before merging raw batches (default: true).",
+    )
+    parser.add_argument(
+        "--include-seed",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=f"Include {SEED_FILE} when present (default: true).",
     )
     args = parser.parse_args()
 
@@ -60,9 +68,12 @@ def main() -> int:
     if args.include_base and args.base_file.exists():
         records.extend(load_jsonl(args.base_file))
 
+    if args.include_seed and SEED_FILE.exists():
+        records.extend(load_jsonl(SEED_FILE))
+
     batch_files = sorted(args.raw_dir.glob("*.jsonl"))
-    if not batch_files:
-        raise FileNotFoundError(f"No batch files found in {args.raw_dir}")
+    if not batch_files and not records:
+        raise FileNotFoundError(f"No batch files found in {args.raw_dir} and no base/seed records loaded")
 
     for batch_file in batch_files:
         records.extend(load_jsonl(batch_file))
