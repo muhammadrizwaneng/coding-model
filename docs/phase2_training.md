@@ -13,13 +13,20 @@ activate the project virtual environment first:
 source venv/bin/activate
 ```
 
-## 1. Validate Dataset
+## 1. Build a broad training dataset (recommended)
+
+Import public coding SFT datasets, then merge with your curated examples:
 
 ```bash
-venv/bin/python scripts/validate_dataset.py
+pip install datasets huggingface_hub
+python scripts/import_hf_datasets.py --preset colab
+python scripts/build_training_dataset.py --require-hf --curated-upsample 5
+python scripts/validate_dataset.py
 ```
 
-Do not train until this passes.
+See [datasets_public.md](datasets_public.md) for `large` / `full` presets.
+
+Do not train until validation passes.
 
 ## 2. Install Training Dependencies
 
@@ -44,11 +51,13 @@ Install deps, restart runtime, then train the **1.5B** model into a matching out
 
 ```bash
 %cd /content/coding-model
+!python scripts/import_hf_datasets.py --preset colab
+!python scripts/build_training_dataset.py --require-hf --curated-upsample 5
 !python scripts/validate_dataset.py
 !python training/train_qlora.py \
   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
   --output-dir models/qwen2.5-coder-1.5b-qlora \
-  --epochs 2 \
+  --epochs 1 \
   --batch-size 1 \
   --learning-rate 1e-4 \
   --gradient-accumulation-steps 8

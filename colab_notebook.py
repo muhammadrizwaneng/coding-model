@@ -17,11 +17,19 @@ Paths assume the repo is cloned to /content/coding-model.
 # !pip install --no-cache-dir -r requirements-colab.txt
 # Runtime > Restart runtime, then %cd /content/coding-model
 
+# Cell 3b: import public coding datasets + merge (run on Colab with network)
+# !pip install -q datasets huggingface_hub
+# !python scripts/import_hf_datasets.py --preset colab
+# !python scripts/build_training_dataset.py --require-hf --curated-upsample 5
+# !python scripts/validate_dataset.py
+# !wc -l datasets/coding_dataset.jsonl
+
 # Cell 3: train 1.5B QLoRA (saves under a matching path + adapter_meta.json)
 # !python training/train_qlora.py \
 #   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
+#   --dataset-path datasets/coding_dataset.jsonl \
 #   --output-dir models/qwen2.5-coder-1.5b-qlora \
-#   --epochs 2 \
+#   --epochs 1 \
 #   --batch-size 1 \
 #   --learning-rate 1e-4 \
 #   --gradient-accumulation-steps 8 \

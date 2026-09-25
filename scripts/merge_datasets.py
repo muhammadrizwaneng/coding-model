@@ -3,6 +3,7 @@ import json
 from pathlib import Path
 
 RAW_DIR = Path("datasets/raw")
+HF_DIR = Path("datasets/hf")
 DEFAULT_OUTPUT = Path("datasets/coding_dataset.jsonl")
 SEED_FILE = Path("datasets/seed.jsonl")
 
@@ -46,21 +47,28 @@ def write_jsonl(path: Path, records: list[dict[str, str]]) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Merge raw JSONL batch files into the main dataset.")
+    parser = argparse.ArgumentParser(description="Merge raw/HF JSONL batch files into the main dataset.")
     parser.add_argument("--raw-dir", default=RAW_DIR, type=Path)
+    parser.add_argument("--hf-dir", default=HF_DIR, type=Path)
     parser.add_argument("--base-file", default=DEFAULT_OUTPUT, type=Path)
     parser.add_argument("--output-file", default=DEFAULT_OUTPUT, type=Path)
     parser.add_argument(
         "--include-base",
         action=argparse.BooleanOptionalAction,
         default=True,
-        help="Include existing main-dataset records before merging raw batches (default: true).",
+        help="Include existing main-dataset records before merging (default: true).",
     )
     parser.add_argument(
         "--include-seed",
         action=argparse.BooleanOptionalAction,
         default=True,
         help=f"Include {SEED_FILE} when present (default: true).",
+    )
+    parser.add_argument(
+        "--include-hf",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help=f"Include {HF_DIR}/*.jsonl imports (default: true).",
     )
     args = parser.parse_args()
 
@@ -71,17 +79,21 @@ def main() -> int:
     if args.include_seed and SEED_FILE.exists():
         records.extend(load_jsonl(SEED_FILE))
 
-    batch_files = sorted(args.raw_dir.glob("*.jsonl"))
-    if not batch_files and not records:
-        raise FileNotFoundError(f"No batch files found in {args.raw_dir} and no base/seed records loaded")
+    batch_files = sorted(args.raw_dir.glob("*.jsonl")) if args.raw_dir.exists() else []
+    hf_files = sorted(args.hf_dir.glob("*.jsonl")) if args.include_hf and args.hf_dir.exists() else []
 
-    for batch_file in batch_files:
+    if not batch_files and not hf_files and not records:
+        raise FileNotFoundError(
+            f"No batch files found in {args.raw_dir} / {args.hf_dir} and no base/seed records loaded"
+        )
+
+    for batch_file in batch_files + hf_files:
         records.extend(load_jsonl(batch_file))
 
     merged = dedupe_records(records)
     write_jsonl(args.output_file, merged)
 
-    print(f"Merged {len(batch_files)} batch files into {args.output_file}")
+    print(f"Merged {len(batch_files)} raw + {len(hf_files)} HF files into {args.output_file}")
     print(f"Total unique records: {len(merged)}")
     return 0
 

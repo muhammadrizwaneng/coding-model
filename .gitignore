@@ -5,3 +5,5 @@ __pycache__/
 .DS_Store
 models/
 evaluation/*_results.jsonl
+datasets/hf/
+datasets/coding_dataset.manifest.json
