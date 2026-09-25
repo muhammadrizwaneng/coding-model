@@ -18,13 +18,14 @@ DEFAULT_SEED = 42
 MIN_OUTPUT_CHARS = 40
 
 PRESETS: dict[str, dict[str, int | None]] = {
-    # Practical Colab mix (~80k-120k before dedupe)
+    # Practical Colab mix (~100k-150k before dedupe)
     "colab": {
         "magicoder_oss": 25000,
         "magicoder_evol": 25000,
         "codealpaca": 20000,
         "opencoder_s1_realuser": 15000,
-        "opencoder_s2": 20000,
+        "opencoder_s2": 10000,
+        "opencoder_s2_evol": 10000,
         "opencodeinstruct": 20000,
     },
     # Larger GPU host mix
@@ -33,7 +34,9 @@ PRESETS: dict[str, dict[str, int | None]] = {
         "magicoder_evol": None,  # full ~110k
         "codealpaca": None,  # full ~20k
         "opencoder_s1_realuser": 50000,
-        "opencoder_s2": 100000,
+        "opencoder_s2": 50000,
+        "opencoder_s2_evol": 50000,
+        "opencoder_s2_package": 30000,
         "opencodeinstruct": 100000,
     },
     # As complete as practical; still samples OpenCodeInstruct unless overridden
@@ -44,6 +47,8 @@ PRESETS: dict[str, dict[str, int | None]] = {
         "opencoder_s1_realuser": None,
         "opencoder_s1_diverse": 100000,
         "opencoder_s2": None,
+        "opencoder_s2_evol": None,
+        "opencoder_s2_package": None,
         "opencodeinstruct": 500000,
     },
 }
@@ -189,7 +194,23 @@ DATASETS: dict[str, DatasetSpec] = {
     "opencoder_s2": DatasetSpec(
         key="opencoder_s2",
         hf_id="OpenCoder-LLM/opc-sft-stage2",
-        config=None,
+        config="educational_instruct",
+        split="train",
+        mapper=map_opencoder,
+        streaming_recommended=True,
+    ),
+    "opencoder_s2_evol": DatasetSpec(
+        key="opencoder_s2_evol",
+        hf_id="OpenCoder-LLM/opc-sft-stage2",
+        config="evol_instruct",
+        split="train",
+        mapper=map_opencoder,
+        streaming_recommended=True,
+    ),
+    "opencoder_s2_package": DatasetSpec(
+        key="opencoder_s2_package",
+        hf_id="OpenCoder-LLM/opc-sft-stage2",
+        config="package_instruct",
         split="train",
         mapper=map_opencoder,
         streaming_recommended=True,
@@ -335,25 +356,33 @@ def main() -> int:
 
     args.output_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
+    failed: list[str] = []
     for key in selected:
         spec = DATASETS[key]
         cap = args.max_per_dataset if args.max_per_dataset is not None else preset.get(key)
-        if isinstance(cap, int) or cap is None:
+        if not (isinstance(cap, int) or cap is None):
+            raise SystemExit(f"Invalid cap for {key}: {cap}")
+        try:
             path = import_one(spec, args.output_dir, max_samples=cap, seed=args.seed)
             written.append(path)
-        else:
-            raise SystemExit(f"Invalid cap for {key}: {cap}")
+        except Exception as exc:
+            failed.append(key)
+            print(f"ERROR importing {key}: {exc}")
+            print("  Continuing with remaining datasets...")
 
     manifest = {
         "preset": args.preset,
         "seed": args.seed,
         "files": [str(path) for path in written],
+        "failed": failed,
     }
     manifest_path = args.output_dir / "import_manifest.json"
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     print(f"\nImport complete. Manifest: {manifest_path}")
+    if failed:
+        print(f"Failed datasets: {', '.join(failed)}")
     print("Next: python scripts/build_training_dataset.py")
-    return 0
+    return 1 if failed and not written else 0
 
 
 if __name__ == "__main__":
