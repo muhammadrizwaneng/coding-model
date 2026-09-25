@@ -1,0 +1,13 @@
+# Lightweight local chat server deps (Python 3.12–3.14 friendly).
+# For fine-tuned inference on Mac CPU; Ollama backend only needs fastapi/uvicorn/ollama.
+fastapi>=0.115.0
+uvicorn>=0.30.0
+ollama>=0.4.0
+numpy>=2.0.0
+torch>=2.6.0
+transformers>=4.46.0
+accelerate>=0.34.0
+peft>=0.13.0
+safetensors>=0.4.0
+sentencepiece
+protobuf
