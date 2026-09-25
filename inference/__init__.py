@@ -1,3 +1,7 @@
-from inference import model_router
+"""Inference package.
 
-__all__ = ["model_router"]
+Keep this module empty so training can import `inference.prompts`
+without requiring Ollama or other runtime-only dependencies.
+"""
+
+__all__: list[str] = []

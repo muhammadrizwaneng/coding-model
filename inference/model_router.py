@@ -2,8 +2,6 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional
 
-from inference import ollama_client
-
 DEFAULT_BACKEND = os.getenv("MODEL_BACKEND", "auto").strip().lower()
 DEFAULT_ADAPTER_PATH = Path(
     os.getenv("ADAPTER_PATH", "models/qwen2.5-coder-1.5b-qlora")
@@ -47,6 +45,9 @@ def model_info() -> Dict[str, str]:
         from inference import hf_client
 
         return hf_client.model_info()
+
+    from inference import ollama_client
+
     return {
         "model": ollama_client.DEFAULT_MODEL,
         "provider": "ollama",
@@ -71,6 +72,9 @@ def chat(
         from inference import hf_client
 
         return hf_client.chat(message=message, history=history)
+
+    from inference import ollama_client
+
     return ollama_client.chat(
         message=message,
         model=model or ollama_client.DEFAULT_MODEL,

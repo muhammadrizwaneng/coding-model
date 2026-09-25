@@ -1,8 +1,6 @@
 import time
 from typing import Dict, List, Optional
 
-import ollama
-
 from inference.prompts import DEFAULT_SYSTEM_PROMPT, truncate_history
 
 DEFAULT_MODEL = "qwen2.5-coder:7b"
@@ -14,6 +12,14 @@ def chat(
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
     history: Optional[List[Dict[str, str]]] = None,
 ) -> Dict[str, object]:
+    try:
+        import ollama
+    except ImportError as exc:
+        raise RuntimeError(
+            "The 'ollama' package is not installed. "
+            "Install it with: pip install ollama"
+        ) from exc
+
     messages: List[Dict[str, str]] = [{"role": "system", "content": system_prompt}]
     messages.extend(truncate_history(history))
     messages.append({"role": "user", "content": message})
