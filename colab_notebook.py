@@ -25,10 +25,12 @@ Paths assume the repo is cloned to /content/coding-model.
 # !wc -l datasets/coding_dataset.jsonl
 
 # Cell 3: train 1.5B QLoRA (saves under a matching path + adapter_meta.json)
+# Default time budget is 60 minutes so a laptop shutdown does not lose a multi-hour run.
+# Pass --time-budget-minutes 0 to train a full epoch.
 # !python training/train_qlora.py \
 #   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
 #   --dataset-path datasets/coding_dataset.jsonl \
-#   --output-dir models/qwen2.5-coder-1.5b-qlora \
+#   --output-dir models/rizwan-code-model \
 #   --epochs 1 \
 #   --batch-size 1 \
 #   --learning-rate 1e-4 \
@@ -36,8 +38,8 @@ Paths assume the repo is cloned to /content/coding-model.
 #   --early-stopping-patience 3
 
 # Cell 4: zip adapters for download
-# !zip -r qwen2.5-coder-1.5b-qlora.zip models/qwen2.5-coder-1.5b-qlora
-# !ls -lh qwen2.5-coder-1.5b-qlora.zip
+# !zip -r rizwan-code-model.zip models/rizwan-code-model
+# !ls -lh rizwan-code-model.zip
 
 # Cell 5: smoke test with the same chat template used in inference
 import os
@@ -51,7 +53,7 @@ from inference.prompts import DEFAULT_SYSTEM_PROMPT
 base_model = "Qwen/Qwen2.5-Coder-1.5B-Instruct"
 adapter_path = os.environ.get(
     "ADAPTER_PATH",
-    "/content/coding-model/models/qwen2.5-coder-1.5b-qlora",
+    "/content/coding-model/models/rizwan-code-model",
 )
 
 print("Adapter exists:", os.path.isdir(adapter_path))

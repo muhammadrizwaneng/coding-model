@@ -43,7 +43,7 @@ Then train as usual:
 !python training/train_qlora.py \
   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
   --dataset-path datasets/coding_dataset.jsonl \
-  --output-dir models/qwen2.5-coder-1.5b-qlora \
+  --output-dir models/rizwan-code-model \
   --epochs 1 \
   --batch-size 1 \
   --learning-rate 1e-4 \

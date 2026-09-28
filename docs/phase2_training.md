@@ -56,7 +56,7 @@ Install deps, restart runtime, then train the **1.5B** model into a matching out
 !python scripts/validate_dataset.py
 !python training/train_qlora.py \
   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \
-  --output-dir models/qwen2.5-coder-1.5b-qlora \
+  --output-dir models/rizwan-code-model \
   --epochs 1 \
   --batch-size 1 \
   --learning-rate 1e-4 \
@@ -68,7 +68,7 @@ The trainer writes `adapter_meta.json` next to the adapter so inference can load
 Zip for download:
 
 ```bash
-!zip -r qwen2.5-coder-1.5b-qlora.zip models/qwen2.5-coder-1.5b-qlora
+!zip -r rizwan-code-model.zip models/rizwan-code-model
 ```
 
 ## 3. Start a Small Test Run (7B on a real GPU host)
@@ -95,7 +95,7 @@ The script:
 MODEL_BACKEND=ollama python inference/run_baseline_eval.py \
   --output-file evaluation/baseline_results.jsonl
 
-MODEL_BACKEND=finetuned ADAPTER_PATH=models/qwen2.5-coder-1.5b-qlora \
+MODEL_BACKEND=finetuned ADAPTER_PATH=models/rizwan-code-model \
   python inference/run_baseline_eval.py \
   --output-file evaluation/finetuned_results.jsonl
 

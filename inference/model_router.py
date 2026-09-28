@@ -3,18 +3,20 @@ from pathlib import Path
 from typing import Dict, List, Optional
 
 DEFAULT_BACKEND = os.getenv("MODEL_BACKEND", "auto").strip().lower()
-DEFAULT_ADAPTER_PATH = Path(
-    os.getenv("ADAPTER_PATH", "models/qwen2.5-coder-1.5b-qlora")
-)
-LEGACY_ADAPTER_PATH = Path("models/qwen2.5-coder-7b-qlora")
+DEFAULT_ADAPTER_PATH = Path(os.getenv("ADAPTER_PATH", "models/rizwan-code-model"))
+LEGACY_ADAPTER_PATHS = [
+    Path("models/qwen2.5-coder-1.5b-qlora"),
+    Path("models/qwen2.5-coder-7b-qlora"),
+]
 
 
 def resolve_adapter_path() -> Path:
     configured = DEFAULT_ADAPTER_PATH
     if adapter_exists(configured):
         return configured
-    if adapter_exists(LEGACY_ADAPTER_PATH):
-        return LEGACY_ADAPTER_PATH
+    for legacy in LEGACY_ADAPTER_PATHS:
+        if adapter_exists(legacy):
+            return legacy
     return configured
 
 

@@ -13,11 +13,13 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig
 from inference.prompts import DEFAULT_SYSTEM_PROMPT, truncate_history
 
 DEFAULT_BASE_MODEL = os.getenv("BASE_MODEL_ID", "Qwen/Qwen2.5-Coder-1.5B-Instruct")
-DEFAULT_ADAPTER_PATH = Path(
-    os.getenv("ADAPTER_PATH", "models/qwen2.5-coder-1.5b-qlora")
-)
-LEGACY_ADAPTER_PATH = Path("models/qwen2.5-coder-7b-qlora")
-DEFAULT_DISPLAY_NAME = os.getenv("MODEL_DISPLAY_NAME", "my-coding-model")
+MODEL_NAME = "rizwan-code-model"
+DEFAULT_ADAPTER_PATH = Path(os.getenv("ADAPTER_PATH", f"models/{MODEL_NAME}"))
+LEGACY_ADAPTER_PATHS = [
+    Path("models/qwen2.5-coder-1.5b-qlora"),
+    Path("models/qwen2.5-coder-7b-qlora"),
+]
+DEFAULT_DISPLAY_NAME = os.getenv("MODEL_DISPLAY_NAME", MODEL_NAME)
 
 _model = None
 _tokenizer = None
@@ -34,8 +36,9 @@ def adapter_exists(adapter_path: Optional[Path] = None) -> bool:
 def resolve_adapter_path() -> Path:
     if DEFAULT_ADAPTER_PATH.is_dir() and (DEFAULT_ADAPTER_PATH / "adapter_config.json").exists():
         return DEFAULT_ADAPTER_PATH
-    if LEGACY_ADAPTER_PATH.is_dir() and (LEGACY_ADAPTER_PATH / "adapter_config.json").exists():
-        return LEGACY_ADAPTER_PATH
+    for legacy in LEGACY_ADAPTER_PATHS:
+        if legacy.is_dir() and (legacy / "adapter_config.json").exists():
+            return legacy
     return DEFAULT_ADAPTER_PATH
 
 
@@ -85,7 +88,7 @@ def load_model(
         raise RuntimeError(
             f"Fine-tuned adapter not found at {adapter}. "
             "Download your Colab zip and extract it there, for example:\n"
-            "models/qwen2.5-coder-1.5b-qlora/adapter_config.json\n"
+            "models/rizwan-code-model/adapter_config.json\n"
             "Or set MODEL_BACKEND=ollama / MODEL_BACKEND=auto."
         )
 

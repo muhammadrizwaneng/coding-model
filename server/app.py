@@ -83,7 +83,11 @@ def chat_endpoint(payload: ChatRequest) -> Dict[str, object]:
         history = truncate_history([message.model_dump() for message in payload.history])
         ollama_model = payload.model.strip() or None
         # Ignore HF display names that are not valid Ollama tags.
-        if ollama_model and ("/" in ollama_model or ollama_model.startswith("my-coding-model")):
+        if ollama_model and (
+            "/" in ollama_model
+            or ollama_model.startswith("my-coding-model")
+            or ollama_model.startswith("rizwan-code-model")
+        ):
             ollama_model = None
         return chat(
             message=payload.message,
