@@ -1,9 +1,13 @@
-# Colab has its own CUDA-enabled PyTorch build, so do not pin torch here.
+# Kaggle/Colab training pins to avoid the TRL chunked-CE + PEFT crash:
+# AttributeError: 'functools.partial' object has no attribute '__func__'
+#
+# Do not pin torch here — use the platform GPU torch build.
 numpy<2
-transformers>=4.46.0
+transformers>=4.46.0,<5.0.0
 datasets>=2.20.0
-accelerate>=0.34.0
-peft>=0.13.0
-trl>=0.12.0
+accelerate>=0.34.0,<2.0.0
+peft>=0.13.0,<0.18.0
+trl>=0.12.0,<0.25.0
 bitsandbytes>=0.43.1
 sentencepiece
+huggingface_hub

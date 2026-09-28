@@ -7,3 +7,7 @@ models/
 evaluation/*_results.jsonl
 datasets/hf/
 datasets/coding_dataset.manifest.json
+
+# Local adapter archives (too large for GitHub)
+*.zip
+qwen2.5-coder-*.zip

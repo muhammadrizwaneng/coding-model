@@ -1,4 +1,5 @@
 import argparse
+import inspect
 import json
 import sys
 from datetime import datetime, timezone
@@ -6,7 +7,7 @@ from pathlib import Path
 
 import torch
 from datasets import Dataset, load_dataset
-from peft import LoraConfig
+from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
 from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, EarlyStoppingCallback
 from trl import SFTConfig, SFTTrainer
 
@@ -94,6 +95,7 @@ def build_model_and_tokenizer(model_id: str):
         trust_remote_code=True,
     )
     model.config.use_cache = False
+    model = prepare_model_for_kbit_training(model)
     return model, tokenizer
 
 
@@ -108,6 +110,21 @@ def write_adapter_meta(output_dir: Path, model_id: str, dataset_path: Path) -> N
         json.dumps(meta, indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
     )
+
+
+def build_sft_config(**kwargs) -> SFTConfig:
+    """Create SFTConfig with Kaggle/Colab-safe defaults.
+
+    Newer TRL defaults to loss_type='chunked_nll', which crashes when model.forward
+    is a functools.partial (common with PEFT-wrapped Qwen on Kaggle).
+    """
+    params = set(inspect.signature(SFTConfig.__init__).parameters)
+    if "loss_type" in params:
+        kwargs.setdefault("loss_type", "nll")
+    # Older TRL used max_seq_length; newer uses max_length.
+    if "max_length" not in params and "max_seq_length" in params and "max_length" in kwargs:
+        kwargs["max_seq_length"] = kwargs.pop("max_length")
+    return SFTConfig(**kwargs)
 
 
 def main() -> int:
@@ -128,6 +145,12 @@ def main() -> int:
     parser.add_argument("--learning-rate", default=2e-4, type=float)
     parser.add_argument("--max-seq-length", default=2048, type=int)
     parser.add_argument("--early-stopping-patience", default=3, type=int)
+    parser.add_argument(
+        "--max-steps",
+        default=-1,
+        type=int,
+        help="Stop after N optimizer steps (-1 = use epochs). Useful on Colab/Kaggle time limits.",
+    )
     args = parser.parse_args()
 
     output_dir = args.output_dir or default_output_dir(args.model_id)
@@ -157,10 +180,14 @@ def main() -> int:
             "down_proj",
         ],
     )
+    # Apply LoRA before SFTTrainer so TRL does not re-wrap in a way that
+    # leaves model.forward as functools.partial during chunked-CE patching.
+    model = get_peft_model(model, peft_config)
 
-    training_args = SFTConfig(
+    training_args = build_sft_config(
         output_dir=str(output_dir),
         num_train_epochs=args.epochs,
+        max_steps=args.max_steps,
         per_device_train_batch_size=args.batch_size,
         per_device_eval_batch_size=args.batch_size,
         gradient_accumulation_steps=args.gradient_accumulation_steps,
@@ -180,15 +207,21 @@ def main() -> int:
         report_to="none",
     )
 
-    trainer = SFTTrainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=eval_dataset,
-        peft_config=peft_config,
-        processing_class=tokenizer,
-        callbacks=[EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience)],
-    )
+    trainer_kwargs = {
+        "model": model,
+        "args": training_args,
+        "train_dataset": train_dataset,
+        "eval_dataset": eval_dataset,
+        "processing_class": tokenizer,
+        "callbacks": [EarlyStoppingCallback(early_stopping_patience=args.early_stopping_patience)],
+    }
+    # Prefer processing_class (new TRL); fall back to tokenizer= for older TRL.
+    try:
+        trainer = SFTTrainer(**trainer_kwargs)
+    except TypeError:
+        trainer_kwargs.pop("processing_class", None)
+        trainer_kwargs["tokenizer"] = tokenizer
+        trainer = SFTTrainer(**trainer_kwargs)
 
     trainer.train()
     trainer.save_model(str(output_dir))
