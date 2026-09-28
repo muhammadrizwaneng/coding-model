@@ -25,7 +25,7 @@ Paths assume the repo is cloned to /content/coding-model.
 # !wc -l datasets/coding_dataset.jsonl
 
 # Cell 3: train 1.5B QLoRA (saves under a matching path + adapter_meta.json)
-# Default time budget is 60 minutes so a laptop shutdown does not lose a multi-hour run.
+# Default time budget is 4 hours (about 3 to 3.5 hours on a T4).
 # Pass --time-budget-minutes 0 to train a full epoch.
 # !python training/train_qlora.py \
 #   --model-id Qwen/Qwen2.5-Coder-1.5B-Instruct \

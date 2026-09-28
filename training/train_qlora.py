@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
-from datasets import Dataset, load_dataset
-from peft import LoraConfig, get_peft_model, prepare_model_for_kbit_training
+from datasets import Dataset, concatenate_datasets, load_dataset
+from peft import LoraConfig, PeftModel, get_peft_model, prepare_model_for_kbit_training
 from transformers import (
     AutoModelForCausalLM,
     AutoTokenizer,
@@ -73,6 +73,53 @@ def format_example(example: dict[str, str], tokenizer) -> dict[str, str]:
     return {"text": text}
 
 
+def load_jsonl_records(path: Path) -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    if not path.exists():
+        return records
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        instruction = str(row.get("instruction", "")).strip()
+        output = str(row.get("output", "")).strip()
+        if not instruction or not output:
+            continue
+        records.append(
+            {
+                "instruction": instruction,
+                "input": str(row.get("input") or "").strip(),
+                "output": output,
+            }
+        )
+    return records
+
+
+def load_curated_records() -> list[dict[str, str]]:
+    records: list[dict[str, str]] = []
+    seed_file = PROJECT_ROOT / "datasets" / "seed.jsonl"
+    raw_dir = PROJECT_ROOT / "datasets" / "raw"
+    records.extend(load_jsonl_records(seed_file))
+    if raw_dir.exists():
+        for path in sorted(raw_dir.glob("*.jsonl")):
+            records.extend(load_jsonl_records(path))
+    return records
+
+
+def expand_curated_for_budget(records: list[dict[str, str]]) -> list[dict[str, str]]:
+    """Repeat FastAPI + SQLAlchemy rows so a short run actually sees the fix."""
+    expanded: list[dict[str, str]] = []
+    for record in records:
+        text = f"{record['instruction']} {record['input']}".lower()
+        if "fastapi" in text and "sqlalchemy" in text:
+            expanded.extend([record] * 30)
+        elif "fastapi" in text:
+            expanded.extend([record] * 4)
+        else:
+            expanded.append(record)
+    return expanded
+
+
 def prepare_dataset(
     dataset_path: Path,
     tokenizer,
@@ -84,12 +131,25 @@ def prepare_dataset(
     dataset = load_dataset("json", data_files=str(dataset_path), split="train")
 
     if max_train_samples is not None or max_eval_samples is not None:
-        dataset = dataset.shuffle(seed=seed)
         eval_n = max_eval_samples if max_eval_samples is not None else max(1, int(len(dataset) * eval_ratio))
         train_n = max_train_samples if max_train_samples is not None else max(1, len(dataset) - eval_n)
-        keep = min(len(dataset), train_n + eval_n)
-        dataset = dataset.select(range(keep))
-        print(f"Time budget: tokenizing {keep} examples instead of the full file.")
+        need = train_n + eval_n
+        curated = expand_curated_for_budget(load_curated_records())
+        hf_need = max(0, need - len(curated))
+        parts: list[Dataset] = []
+        if curated:
+            parts.append(Dataset.from_list(curated))
+        if hf_need:
+            hf = dataset.shuffle(seed=seed)
+            hf = hf.select(range(min(len(hf), hf_need)))
+            keep_columns = [name for name in ("instruction", "input", "output") if name in hf.column_names]
+            hf = hf.select_columns(keep_columns)
+            parts.append(hf)
+        dataset = parts[0] if len(parts) == 1 else concatenate_datasets(parts)
+        print(
+            f"Time budget: {len(curated)} curated rows "
+            f"(FastAPI + SQLAlchemy repeated) and {hf_need} other rows."
+        )
 
     dataset = dataset.map(lambda example: format_example(example, tokenizer))
 
@@ -156,11 +216,13 @@ def configure_for_time_budget(args) -> None:
     if args.max_eval_samples < 0 or args.max_eval_samples > eval_cap:
         args.max_eval_samples = eval_cap
     args.eval_steps = args.max_steps
+    expected_hours = (args.max_steps * 33) / 3600
     print(
         f"Planned run: {args.max_steps} optimizer steps, "
         f"one eval of {args.max_eval_samples} samples at the end, "
         f"adapter checkpoint every 20 steps. "
-        f"Expected about 50 minutes on a T4, inside {args.time_budget_minutes:g} minutes. "
+        f"Expected about {expected_hours:.1f} hours on a T4, "
+        f"and it stops by {args.time_budget_minutes / 60:.0f} hours. "
         f"Pass --time-budget-minutes 0 for a full run."
     )
 
@@ -243,9 +305,9 @@ def main() -> int:
     )
     parser.add_argument(
         "--time-budget-minutes",
-        default=60,
+        default=240,
         type=float,
-        help="Wall-clock cap for the whole training run. 0 disables the cap.",
+        help="Wall-clock cap for the whole training run. Default 240 minutes (4 hours). 0 disables the cap.",
     )
     parser.add_argument(
         "--max-eval-samples",
@@ -302,7 +364,14 @@ def main() -> int:
     )
     # Apply LoRA before SFTTrainer so TRL does not re-wrap in a way that
     # leaves model.forward as functools.partial during chunked-CE patching.
-    model = get_peft_model(model, peft_config)
+    # If a previous rizwan-code-model adapter is already in the output folder,
+    # keep training it instead of starting over.
+    existing_adapter = output_dir / "adapter_config.json"
+    if existing_adapter.exists():
+        print(f"Continuing training from existing adapter at {output_dir}")
+        model = PeftModel.from_pretrained(model, str(output_dir), is_trainable=True)
+    else:
+        model = get_peft_model(model, peft_config)
 
     # Frequent full evals dominate runtime (~74 min each). Under a time budget,
     # evaluate once at the end and save the adapter without the optimizer state.

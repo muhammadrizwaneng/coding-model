@@ -2,7 +2,7 @@
 # AttributeError: 'functools.partial' object has no attribute '__func__'
 #
 # Do not pin torch here — use the platform GPU torch build.
-numpy<2
+numpy>=2.0
 transformers>=4.46.0,<5.0.0
 datasets>=2.20.0
 accelerate>=0.34.0,<2.0.0
