@@ -2,6 +2,8 @@
 
 The current adapter was trained for about one hour, on about 650 examples, on a 1.5B base. Quality improves when the run is longer, the base is larger, and the training answers are actually correct.
 
+For a **curated-only** retrain on Kaggle (~400 vetted rows, no public HF mix), use [kaggle_training.md](kaggle_training.md).
+
 ## 1. Train longer
 
 The script stops by 4 hours unless you turn the cap off:

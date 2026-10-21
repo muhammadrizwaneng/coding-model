@@ -105,10 +105,20 @@ def main() -> int:
         default=3,
         help="Repeat curated/seed rows this many times so specialty data is not drowned out (default: 3).",
     )
+    parser.add_argument(
+        "--curated-only",
+        action="store_true",
+        help="Use datasets/raw + seed only. Skips datasets/hf (recommended when public HF rows teach outdated patterns).",
+    )
     args = parser.parse_args()
 
-    files = collect_files(args.raw_dir, args.hf_dir, include_seed=args.include_seed)
-    hf_files = [path for path in files if is_under(path, args.hf_dir)]
+    hf_dir = Path("__skip_hf__") if args.curated_only else args.hf_dir
+    files = collect_files(args.raw_dir, hf_dir, include_seed=args.include_seed)
+    hf_files = (
+        []
+        if args.curated_only
+        else [path for path in files if is_under(path, args.hf_dir)]
+    )
     curated_files = [path for path in files if path not in hf_files]
 
     if args.require_hf and not hf_files:
